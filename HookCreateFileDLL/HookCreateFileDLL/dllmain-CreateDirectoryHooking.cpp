@@ -1,10 +1,9 @@
-
 #pragma comment(lib, "detours.lib")
 
 #undef UNICODE
 #include <windows.h>
 #include "detours.h"
-#include <fstream>
+#include <fstream>  
 #include <string>
 #include <direct.h>
 #include <strsafe.h>
@@ -13,23 +12,13 @@ extern __declspec(dllexport) void foo();
 
 #define DIR_PATH "C:\\temp\\"
 
-HANDLE(WINAPI * Real_CreateFile) (
-	LPCWSTR lpFileName,
-	DWORD dwDesiredAccess,
-	DWORD dwShareMode,
-	LPSECURITY_ATTRIBUTES lpSecurityAttributes,
-	DWORD dwCreationDisposition,
-	DWORD dwFlagsAndAttributes,
-	HANDLE hTemplateFile) = CreateFileW;
+BOOL(WINAPI * Real_CreateDirectory) (
+	LPCWSTR lpPathName,
+	LPSECURITY_ATTRIBUTES lpSecurityAttributes) = CreateDirectoryW;
 
-HANDLE WINAPI Routed_CreateFile(
-	LPCWSTR lpFileName,
-	DWORD dwDesiredAccess,
-	DWORD dwShareMode,
-	LPSECURITY_ATTRIBUTES lpSecurityAttributes,
-	DWORD dwCreationDisposition,
-	DWORD dwFlagsAndAttributes,
-	HANDLE hTemplateFile)
+BOOL WINAPI Routed_CreateDirectory(
+	LPCWSTR lpPathName,
+	LPSECURITY_ATTRIBUTES lpSecurityAttributes)
 {
 
 	DWORD pid = GetCurrentProcessId();
@@ -52,12 +41,12 @@ HANDLE WINAPI Routed_CreateFile(
 	sprintf_s(fullPIDLogFilePath, "%s%d.txt", DIR_PATH, pid);
 	mbstowcs(wtext, fullPIDLogFilePath, strlen(fullPIDLogFilePath) + 1);//Plus null
 	LPWSTR ptr = wtext;
-	hFile = Real_CreateFile(ptr, FILE_APPEND_DATA, FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	hFile = CreateFileW(ptr, FILE_APPEND_DATA, FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	if (hFile == INVALID_HANDLE_VALUE)
 		OutputDebugString(TEXT("Unable to open file\n"));
 
-	wcstombs_s(&i, DataBuffer, (size_t)500, lpFileName, 500);
+	wcstombs_s(&i, DataBuffer, (size_t)500, lpPathName, 500);
 	sprintf_s(DataBuffer, "%s\r\n", DataBuffer);
 	dwBytesToWrite = (DWORD)strlen(DataBuffer);
 	//sprintf_s(logger, "length: %d\n", dwBytesToWrite);
@@ -84,7 +73,7 @@ HANDLE WINAPI Routed_CreateFile(
 	//sprintf_s(fullPIDLogFilePath, "PID %d Tried to create a file named %s\n", pid, name);
 	//OutputDebugString(TEXT(fullPIDLogFilePath));
 
-	return Real_CreateFile(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+	return Real_CreateDirectory(lpPathName, lpSecurityAttributes);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
@@ -94,11 +83,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 	{
 	case DLL_PROCESS_ATTACH:
 
-		OutputDebugString(TEXT("Attaching HookCreateFileDll.dll"));
+		OutputDebugString(TEXT("Attaching HookCreateDirectoryDll.dll"));
 		DetourRestoreAfterWith();
 		DetourTransactionBegin();
 		DetourUpdateThread(GetCurrentThread());
-		DetourAttach(&(PVOID&)Real_CreateFile, Routed_CreateFile);
+		DetourAttach(&(PVOID&)Real_CreateDirectory, Routed_CreateDirectory);
 		Error = DetourTransactionCommit();
 
 		if (Error == NO_ERROR)
@@ -108,10 +97,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 
 		break;
 	case DLL_PROCESS_DETACH:
-		OutputDebugString(TEXT("De-Attaching HookCreateFileDll.dll"));
+		OutputDebugString(TEXT("De-Attaching HookCreateDirectoryDll.dll"));
 		DetourTransactionBegin();
 		DetourUpdateThread(GetCurrentThread());
-		DetourDetach(&(PVOID&)Real_CreateFile, Routed_CreateFile);
+		DetourDetach(&(PVOID&)Real_CreateDirectory, Routed_CreateDirectory);
 		Error = DetourTransactionCommit();
 
 		if (Error == NO_ERROR)
@@ -125,4 +114,5 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 	}
 	return TRUE;
 }
+
 
