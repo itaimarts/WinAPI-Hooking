@@ -12,7 +12,6 @@ using std::string;
 
 int main(void)
 {
-	vector<string> processNames;
 	PROCESSENTRY32 pe32;
 	pe32.dwSize = sizeof(PROCESSENTRY32);
 	HANDLE hTool32 = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
